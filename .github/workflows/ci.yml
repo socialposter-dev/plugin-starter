@@ -1,0 +1,130 @@
+name: Build & Verify SocialPoster WASM Plugins
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-rust:
+    name: Build & Verify (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Compile Rust plugin
+        working-directory: rust
+        run: |
+          cargo build --release --target wasm32-wasip1
+          cp target/wasm32-wasip1/release/socialposter_example_plugin.wasm ../output/example-social-rust.wasm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify WebAssembly ABI exports
+        run: node cli/verify-wasm.mjs output/example-social-rust.wasm
+
+  build-go:
+    name: Build & Verify (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install TinyGo
+        run: |
+          curl -fsSL https://github.com/tinygo-org/tinygo/releases/download/v0.35.0/tinygo_0.35.0_amd64.deb -o /tmp/tinygo.deb
+          sudo dpkg -i /tmp/tinygo.deb
+
+      - name: Compile Go plugin
+        working-directory: go
+        run: tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared .
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify WebAssembly ABI exports
+        run: node cli/verify-wasm.mjs output/example-social-go.wasm
+
+  build-typescript:
+    name: Build & Verify (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install extism-js
+        run: |
+          curl -fsSL https://get.extism.org/js -o /tmp/install-extism-js.sh
+          sh /tmp/install-extism-js.sh
+
+      - name: Compile TypeScript plugin
+        working-directory: typescript
+        run: |
+          npm install
+          npm run build
+
+      - name: Verify WebAssembly ABI exports
+        run: node cli/verify-wasm.mjs output/example-social-typescript.wasm
+
+  build-python:
+    name: Build & Verify (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install binaryen and extism-py
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq binaryen
+          pip install --no-cache-dir extism-py
+
+      - name: Compile Python plugin
+        working-directory: python
+        run: extism-py plugin.py -o ../output/example-social-python.wasm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify WebAssembly ABI exports
+        run: node cli/verify-wasm.mjs output/example-social-python.wasm
+
+  build-c:
+    name: Build & Verify (C)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WASI SDK
+        run: |
+          curl -fsSL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz -o /tmp/wasi-sdk.tar.gz
+          tar -xzf /tmp/wasi-sdk.tar.gz -C /tmp
+
+      - name: Compile C plugin
+        working-directory: c
+        run: make CC=/tmp/wasi-sdk-25.0-x86_64-linux/bin/clang OUT=../output/example-social-c.wasm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify WebAssembly ABI exports
+        run: node cli/verify-wasm.mjs output/example-social-c.wasm

@@ -1,0 +1,23 @@
+# Internal architecture notes (keep local only)
+ARCHITECTURE.md
+
+# Compiled WebAssembly artefacts
+output/*.wasm
+
+# CLI dependencies
+cli/node_modules/
+
+# Language-specific build caches
+rust/target/
+typescript/node_modules/
+typescript/dist/
+python/__pycache__/
+python/.venv/
+c/*.o
+c/*.wasm
+go/*.wasm
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+ARCHITECTURE.md

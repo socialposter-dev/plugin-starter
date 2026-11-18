@@ -1,0 +1,13 @@
+{
+  "name": "socialposter-plugin-cli",
+  "version": "1.0.0",
+  "description": "Interactive CLI builder and WebAssembly ABI verifier for SocialPoster plugins.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "sp-build": "./index.mjs"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.8.2"
+  }
+}

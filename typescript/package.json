@@ -1,0 +1,15 @@
+{
+  "name": "socialposter-example-plugin",
+  "version": "1.0.0",
+  "description": "Reference SocialPoster WebAssembly plugin written in TypeScript for extism-js.",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "bundle": "esbuild src/index.ts --bundle --format=cjs --outfile=dist/plugin.js",
+    "build": "npm run typecheck && npm run bundle && extism-js dist/plugin.js -i src/plugin.d.ts -o ../output/example-social-typescript.wasm"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2"
+  }
+}
