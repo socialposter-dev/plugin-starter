@@ -212,7 +212,7 @@ function buildTypeScript(outFile, outName) {
     'node:22-bookworm',
     'sh',
     '-c',
-    `apt-get update -qq && apt-get install -y -qq binaryen curl >/dev/null && curl -fsSL https://raw.githubusercontent.com/extism/js-pdk/main/install.sh -o /tmp/install-extism-js.sh && bash /tmp/install-extism-js.sh && npm install && npm run typecheck && npm run bundle && extism-js dist/plugin.js -i src/plugin.d.ts -o /workspace/output/${outName}`,
+    `apt-get update -qq && apt-get install -y -qq binaryen curl >/dev/null && TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/extism/js-pdk/releases/latest | awk -F/ '{print $NF}') && curl -fsSL "https://github.com/extism/js-pdk/releases/download/\${TAG}/extism-js-x86_64-linux-\${TAG}.gz" -o /tmp/extism-js.gz && gunzip -f /tmp/extism-js.gz && mv /tmp/extism-js /usr/local/bin/extism-js && chmod +x /usr/local/bin/extism-js && npm ci && npm run typecheck && npm run bundle && extism-js dist/plugin.js -i src/plugin.d.ts -o /workspace/output/${outName}`,
   ]);
   return 'Docker (node:22-bookworm + extism-js)';
 }

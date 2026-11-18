@@ -68,17 +68,21 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install binaryen and extism-js
+      - name: Install Binaryen and extism-js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq binaryen
-          curl -fsSL https://raw.githubusercontent.com/extism/js-pdk/main/install.sh -o /tmp/install-extism-js.sh
-          bash /tmp/install-extism-js.sh
+          sudo apt-get update && sudo apt-get install -y binaryen
+          gh release download --repo extism/js-pdk --pattern "extism-js-x86_64-linux-*.gz" --dir /tmp
+          gunzip -f /tmp/extism-js-x86_64-linux-*.gz
+          sudo mv /tmp/extism-js-x86_64-linux-* /usr/local/bin/extism-js
+          sudo chmod +x /usr/local/bin/extism-js
+          extism-js --version || extism-js --help
 
       - name: Compile TypeScript plugin
         working-directory: typescript
         run: |
-          npm install
+          npm ci
           npm run build
 
       - name: Verify WebAssembly ABI exports
