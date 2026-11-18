@@ -212,7 +212,7 @@ function buildTypeScript(outFile, outName) {
     'node:22-bookworm',
     'sh',
     '-c',
-    `apt-get update -qq && apt-get install -y -qq binaryen curl jq >/dev/null && ASSET_URL=$(curl -fsSL https://api.github.com/repos/extism/js-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1) && curl -fsSL "$ASSET_URL" -o /tmp/extism-js-asset && case "$ASSET_URL" in *.tar.gz|*.tgz) mkdir -p /tmp/extism-js-extract && tar -xzf /tmp/extism-js-asset -C /tmp/extism-js-extract && install -m 0755 "$(find /tmp/extism-js-extract -type f -name extism-js | head -n 1)" /usr/local/bin/extism-js ;; *.gz) gunzip -c /tmp/extism-js-asset > /usr/local/bin/extism-js && chmod +x /usr/local/bin/extism-js ;; *) install -m 0755 /tmp/extism-js-asset /usr/local/bin/extism-js ;; esac && npm install && npm run typecheck && npm run bundle && extism-js dist/plugin.js -i src/plugin.d.ts -o /workspace/output/${outName}`,
+    `apt-get update -qq && apt-get install -y -qq binaryen curl >/dev/null && curl -fsSL https://raw.githubusercontent.com/extism/js-pdk/main/install.sh -o /tmp/install-extism-js.sh && bash /tmp/install-extism-js.sh && npm install && npm run typecheck && npm run bundle && extism-js dist/plugin.js -i src/plugin.d.ts -o /workspace/output/${outName}`,
   ]);
   return 'Docker (node:22-bookworm + extism-js)';
 }

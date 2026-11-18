@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -93,7 +94,7 @@ func resolveBaseURL(creds map[string]string) string {
 func outputJSON(v any) int32 {
 	data, err := json.Marshal(v)
 	if err != nil {
-		pdk.SetError(fmt.Sprintf("failed to serialise response: %v", err))
+		pdk.SetError(fmt.Errorf("failed to serialise response: %v", err))
 		return 1
 	}
 	pdk.Output(data)
@@ -137,7 +138,7 @@ func describe() int32 {
 func validateAuth() int32 {
 	var input ValidateAuthInput
 	if err := pdk.InputJSON(&input); err != nil {
-		pdk.SetError(fmt.Sprintf("invalid input JSON: %v", err))
+		pdk.SetError(fmt.Errorf("invalid input JSON: %v", err))
 		return 1
 	}
 
@@ -170,13 +171,13 @@ func validateAuth() int32 {
 func publish() int32 {
 	var input PublishInput
 	if err := pdk.InputJSON(&input); err != nil {
-		pdk.SetError(fmt.Sprintf("invalid input JSON: %v", err))
+		pdk.SetError(fmt.Errorf("invalid input JSON: %v", err))
 		return 1
 	}
 
 	token := input.Credentials["api_token"]
 	if token == "" {
-		pdk.SetError("Missing required credential: api_token")
+		pdk.SetError(errors.New("Missing required credential: api_token"))
 		return 1
 	}
 	baseURL := resolveBaseURL(input.Credentials)
@@ -197,7 +198,7 @@ func publish() int32 {
 
 		uploadRes := uploadReq.Send()
 		if uploadRes.Status() < 200 || uploadRes.Status() >= 300 {
-			pdk.SetError(fmt.Sprintf("Media upload failed with HTTP status %d.", uploadRes.Status()))
+			pdk.SetError(fmt.Errorf("Media upload failed with HTTP status %d.", uploadRes.Status()))
 			return 1
 		}
 
@@ -226,7 +227,7 @@ func publish() int32 {
 
 	postRes := postReq.Send()
 	if postRes.Status() < 200 || postRes.Status() >= 300 {
-		pdk.SetError(fmt.Sprintf("Publish failed with HTTP status %d.", postRes.Status()))
+		pdk.SetError(fmt.Errorf("Publish failed with HTTP status %d.", postRes.Status()))
 		return 1
 	}
 
@@ -252,17 +253,17 @@ func publish() int32 {
 func deletePost() int32 {
 	var input DeletePostInput
 	if err := pdk.InputJSON(&input); err != nil {
-		pdk.SetError(fmt.Sprintf("invalid input JSON: %v", err))
+		pdk.SetError(fmt.Errorf("invalid input JSON: %v", err))
 		return 1
 	}
 
 	token := input.Credentials["api_token"]
 	if token == "" {
-		pdk.SetError("Missing required credential: api_token")
+		pdk.SetError(errors.New("Missing required credential: api_token"))
 		return 1
 	}
 	if strings.TrimSpace(input.PostID) == "" {
-		pdk.SetError("post_id must not be empty.")
+		pdk.SetError(errors.New("post_id must not be empty."))
 		return 1
 	}
 
@@ -272,7 +273,7 @@ func deletePost() int32 {
 
 	res := req.Send()
 	if res.Status() < 200 || res.Status() >= 300 {
-		pdk.SetError(fmt.Sprintf("Delete failed with HTTP status %d.", res.Status()))
+		pdk.SetError(fmt.Errorf("Delete failed with HTTP status %d.", res.Status()))
 		return 1
 	}
 
