@@ -38,11 +38,11 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.23'
 
       - name: Install TinyGo
         run: |
-          curl -fsSL https://github.com/tinygo-org/tinygo/releases/download/v0.35.0/tinygo_0.35.0_amd64.deb -o /tmp/tinygo.deb
+          curl -fsSL https://github.com/tinygo-org/tinygo/releases/download/v0.34.0/tinygo_0.34.0_amd64.deb -o /tmp/tinygo.deb
           sudo dpkg -i /tmp/tinygo.deb
 
       - name: Compile Go plugin
@@ -66,10 +66,27 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install extism-js
+      - name: Install binaryen and extism-js
         run: |
-          curl -fsSL https://get.extism.org/js -o /tmp/install-extism-js.sh
-          sh /tmp/install-extism-js.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq binaryen jq
+          ASSET_URL=$(curl -fsSL https://api.github.com/repos/extism/js-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1)
+          curl -fsSL "$ASSET_URL" -o /tmp/extism-js-asset
+          case "$ASSET_URL" in
+            *.tar.gz|*.tgz)
+              mkdir -p /tmp/extism-js-extract
+              tar -xzf /tmp/extism-js-asset -C /tmp/extism-js-extract
+              BIN_PATH=$(find /tmp/extism-js-extract -type f -name "extism-js" | head -n 1)
+              sudo install -m 0755 "$BIN_PATH" /usr/local/bin/extism-js
+              ;;
+            *.gz)
+              gunzip -c /tmp/extism-js-asset | sudo tee /usr/local/bin/extism-js >/dev/null
+              sudo chmod +x /usr/local/bin/extism-js
+              ;;
+            *)
+              sudo install -m 0755 /tmp/extism-js-asset /usr/local/bin/extism-js
+              ;;
+          esac
 
       - name: Compile TypeScript plugin
         working-directory: typescript
@@ -86,15 +103,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Install binaryen and extism-py
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq binaryen
-          pip install --no-cache-dir extism-py
+          sudo apt-get install -y -qq binaryen jq
+          ASSET_URL=$(curl -fsSL https://api.github.com/repos/extism/python-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1)
+          curl -fsSL "$ASSET_URL" -o /tmp/extism-py-asset
+          case "$ASSET_URL" in
+            *.tar.gz|*.tgz)
+              mkdir -p /tmp/extism-py-extract
+              tar -xzf /tmp/extism-py-asset -C /tmp/extism-py-extract
+              BIN_PATH=$(find /tmp/extism-py-extract -type f -name "extism-py" | head -n 1)
+              sudo install -m 0755 "$BIN_PATH" /usr/local/bin/extism-py
+              ;;
+            *.gz)
+              gunzip -c /tmp/extism-py-asset | sudo tee /usr/local/bin/extism-py >/dev/null
+              sudo chmod +x /usr/local/bin/extism-py
+              ;;
+            *)
+              sudo install -m 0755 /tmp/extism-py-asset /usr/local/bin/extism-py
+              ;;
+          esac
 
       - name: Compile Python plugin
         working-directory: python

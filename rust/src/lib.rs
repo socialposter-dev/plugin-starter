@@ -187,7 +187,7 @@ pub fn validate_auth(Json(input): Json<ValidateAuthInput>) -> FnResult<Json<Vali
         .with_header("Authorization", format!("Bearer {token}"))
         .with_header("Accept", "application/json");
 
-    let res = http::request(&req, None)?;
+    let res = http::request(&req, None::<Memory>)?;
     if res.status_code() >= 200 && res.status_code() < 300 {
         Ok(Json(ValidateAuthOutput {
             valid: true,
@@ -232,7 +232,8 @@ pub fn publish(Json(input): Json<PublishInput>) -> FnResult<Json<PublishOutput>>
             return Err(Error::msg(format!(
                 "Media upload failed with HTTP status {}.",
                 upload_res.status_code()
-            )));
+            ))
+            .into());
         }
 
         let parsed: serde_json::Value = serde_json::from_slice(&upload_res.body())?;
@@ -259,7 +260,8 @@ pub fn publish(Json(input): Json<PublishInput>) -> FnResult<Json<PublishOutput>>
         return Err(Error::msg(format!(
             "Publish failed with HTTP status {}.",
             post_res.status_code()
-        )));
+        ))
+        .into());
     }
 
     let body: serde_json::Value = serde_json::from_slice(&post_res.body())?;
@@ -285,7 +287,7 @@ pub fn delete_post(Json(input): Json<DeletePostInput>) -> FnResult<Json<DeletePo
         .get("api_token")
         .ok_or_else(|| Error::msg("Missing required credential: api_token"))?;
     if input.post_id.trim().is_empty() {
-        return Err(Error::msg("post_id must not be empty."));
+        return Err(Error::msg("post_id must not be empty.").into());
     }
 
     let url = format!("{}/v1/posts/{}", resolve_base_url(&input.credentials), input.post_id);
@@ -293,13 +295,14 @@ pub fn delete_post(Json(input): Json<DeletePostInput>) -> FnResult<Json<DeletePo
         .with_method("DELETE")
         .with_header("Authorization", format!("Bearer {token}"));
 
-    let res = http::request(&req, None)?;
+    let res = http::request(&req, None::<Memory>)?;
     if res.status_code() >= 200 && res.status_code() < 300 {
         Ok(Json(DeletePostOutput { deleted: true }))
     } else {
         Err(Error::msg(format!(
             "Delete failed with HTTP status {}.",
             res.status_code()
-        )))
+        ))
+        .into())
     }
 }
