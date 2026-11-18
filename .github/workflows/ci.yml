@@ -47,7 +47,9 @@ jobs:
 
       - name: Compile Go plugin
         working-directory: go
-        run: tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared .
+        run: |
+          go mod tidy
+          tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared .
 
       - uses: actions/setup-node@v4
         with:
@@ -109,21 +111,14 @@ jobs:
           sudo apt-get install -y -qq binaryen jq
           ASSET_URL=$(curl -fsSL https://api.github.com/repos/extism/python-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1)
           curl -fsSL "$ASSET_URL" -o /tmp/extism-py-asset
-          case "$ASSET_URL" in
-            *.tar.gz|*.tgz)
-              mkdir -p /tmp/extism-py-extract
-              tar -xzf /tmp/extism-py-asset -C /tmp/extism-py-extract
-              BIN_PATH=$(find /tmp/extism-py-extract -type f -name "extism-py" | head -n 1)
-              sudo install -m 0755 "$BIN_PATH" /usr/local/bin/extism-py
-              ;;
-            *.gz)
-              gunzip -c /tmp/extism-py-asset | sudo tee /usr/local/bin/extism-py >/dev/null
-              sudo chmod +x /usr/local/bin/extism-py
-              ;;
-            *)
-              sudo install -m 0755 /tmp/extism-py-asset /usr/local/bin/extism-py
-              ;;
-          esac
+          mkdir -p /tmp/extism-py
+          tar -xzf /tmp/extism-py-asset -C /tmp/extism-py
+          BIN_PATH=$(find /tmp/extism-py -type f -name "extism-py" | head -n 1)
+          sudo install -m 0755 "$BIN_PATH" /usr/local/bin/extism-py
+          USR_DIR=$(find /tmp/extism-py -maxdepth 4 -type d -name "usr" | head -n 1)
+          mkdir -p "${HOME}/.local/share/extism-py"
+          cp -r "$USR_DIR" "${HOME}/.local/share/extism-py/usr"
+          test -d "${HOME}/.local/share/extism-py/usr"
 
       - name: Compile Python plugin
         working-directory: python

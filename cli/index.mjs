@@ -152,6 +152,7 @@ function buildGo(outFile, outName) {
   const goDir = join(ROOT_DIR, 'go');
 
   if (commandExists('go') && commandExists('tinygo')) {
+    runCommand('go', ['mod', 'tidy'], goDir);
     runCommand(
       'tinygo',
       ['build', '-o', outFile, '-target', 'wasip1', '-buildmode=c-shared', '.'],
@@ -173,14 +174,9 @@ function buildGo(outFile, outName) {
     '-w',
     '/workspace/go',
     'tinygo/tinygo:0.34.0',
-    'tinygo',
-    'build',
-    '-o',
-    `/workspace/output/${outName}`,
-    '-target',
-    'wasip1',
-    '-buildmode=c-shared',
-    '.',
+    'sh',
+    '-c',
+    `go mod tidy && tinygo build -o /workspace/output/${outName} -target wasip1 -buildmode=c-shared .`,
   ]);
   return 'Docker (tinygo/tinygo:0.34.0)';
 }
@@ -243,7 +239,7 @@ function buildPython(outFile, outName) {
     'python:3.12-bookworm',
     'sh',
     '-c',
-    `apt-get update -qq && apt-get install -y -qq binaryen curl jq >/dev/null && ASSET_URL=$(curl -fsSL https://api.github.com/repos/extism/python-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1) && curl -fsSL "$ASSET_URL" -o /tmp/extism-py-asset && case "$ASSET_URL" in *.tar.gz|*.tgz) mkdir -p /tmp/extism-py-extract && tar -xzf /tmp/extism-py-asset -C /tmp/extism-py-extract && install -m 0755 "$(find /tmp/extism-py-extract -type f -name extism-py | head -n 1)" /usr/local/bin/extism-py ;; *.gz) gunzip -c /tmp/extism-py-asset > /usr/local/bin/extism-py && chmod +x /usr/local/bin/extism-py ;; *) install -m 0755 /tmp/extism-py-asset /usr/local/bin/extism-py ;; esac && extism-py plugin.py -o /workspace/output/${outName}`,
+    `apt-get update -qq && apt-get install -y -qq binaryen curl jq >/dev/null && ASSET_URL=$(curl -fsSL https://api.github.com/repos/extism/python-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1) && curl -fsSL "$ASSET_URL" -o /tmp/extism-py-asset && mkdir -p /tmp/extism-py && tar -xzf /tmp/extism-py-asset -C /tmp/extism-py && install -m 0755 "$(find /tmp/extism-py -type f -name extism-py | head -n 1)" /usr/local/bin/extism-py && USR_DIR=$(find /tmp/extism-py -maxdepth 4 -type d -name usr | head -n 1) && mkdir -p "\${HOME}/.local/share/extism-py" && cp -r "$USR_DIR" "\${HOME}/.local/share/extism-py/usr" && test -d "\${HOME}/.local/share/extism-py/usr" && extism-py plugin.py -o /workspace/output/${outName}`,
   ]);
   return 'Docker (python:3.12-bookworm + extism-py)';
 }
