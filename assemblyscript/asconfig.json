@@ -1,0 +1,14 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "../output/example-social-assemblyscript.wasm",
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": false,
+      "noAssert": false,
+      "use": [
+        "abort=assembly/index/abort"
+      ]
+    }
+  }
+}

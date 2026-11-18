@@ -1,6 +1,6 @@
 # SocialPoster WebAssembly Plugin Starter
 
-A multi-language starter repository and interactive build tool for creating sandboxed WebAssembly (`.wasm`) plugins for SocialPoster.
+A multi-language starter repository and interactive build tool for creating compact, sandboxed WebAssembly (`.wasm`) plugins for SocialPoster.
 
 ## Repository Layout
 
@@ -10,8 +10,8 @@ plugin-starter-wasm/
 ├── build.sh                   # Interactive builder wrapper for macOS and Linux
 ├── rust/                      # Rust reference plugin (extism-pdk)
 ├── go/                        # Go reference plugin (TinyGo + go-pdk)
-├── typescript/                # TypeScript reference plugin (extism-js)
-├── python/                    # Python reference plugin (extism-py)
+├── assemblyscript/            # AssemblyScript reference plugin (@extism/as-pdk)
+├── zig/                       # Zig reference plugin (extism/zig-pdk)
 ├── c/                         # C reference plugin (clang + vendored extism-pdk.h)
 ├── cli/                       # Interactive @clack/prompts builder and ABI verifier
 └── output/                    # Compiled .wasm artefacts (git-ignored)
@@ -22,7 +22,7 @@ plugin-starter-wasm/
 ### Prerequisites
 
 - **Node.js 20+** (required to run the interactive CLI and WebAssembly export verifier)
-- **Either** the local toolchain for your chosen language (`cargo` with `wasm32-wasip1`, `go` + `tinygo`, `extism-js`, `extism-py`, or WASI-capable `clang`) **or Docker Desktop** for zero-setup containerised compilation
+- **Either** the local toolchain for your chosen language (`cargo`, `go` + `tinygo`, `npm` for AssemblyScript, `zig`, or WASI-capable `clang`) **or Docker Desktop** for zero-setup containerised compilation
 
 ### Running the Builder
 
@@ -40,15 +40,15 @@ On **macOS / Linux**:
 
 On first run, the wrapper installs `cli/` dependencies automatically. The interactive CLI then:
 
-1. Prompts you to select a language implementation (`Rust`, `Go`, `TypeScript`, `Python`, or `C`).
+1. Prompts you to select a language implementation (`Rust`, `Go`, `AssemblyScript`, `Zig`, or `C`).
 2. Parses `describe()` from that language's source file and displays a summary of your plugin ID, version, brand colour, limits, capabilities, `allowed_domains`, and `credential_fields` for confirmation.
-3. Compiles the plugin using your local toolchain—or falls back automatically to an official Docker build container if the local compiler is missing—and writes the binary to `output/{id}-{language}.wasm`.
-4. Prints the artefact's file size and SHA-256 checksum, and verifies via `WebAssembly.Module.exports()` that all four required ABI functions are exported.
+3. Compiles the plugin using your local toolchain—or falls back automatically to an official Docker build container if the local compiler is missing—and writes the binary to `output/`.
+4. Prints the artefact's file size (in KB and bytes) and SHA-256 checksum, and verifies via `WebAssembly.Module.exports()` that all four required ABI functions are exported and that the binary is within the 1 MB Hub limit.
 
 You can also verify any compiled module directly with:
 
 ```sh
-node cli/verify-wasm.mjs output/example-social-rust.wasm
+node cli/verify-wasm.mjs output/example-social-assemblyscript.wasm
 ```
 
 ## Customising Your Plugin
@@ -59,8 +59,8 @@ Edit the `describe()` metadata and platform API hooks in the source file for you
 | :--- | :--- | :--- |
 | Rust | `rust/src/lib.rs` | `rust/Cargo.toml` |
 | Go | `go/main.go` | `go/go.mod` |
-| TypeScript | `typescript/src/index.ts` | `typescript/package.json`, `typescript/tsconfig.json`, `typescript/src/plugin.d.ts` |
-| Python | `python/plugin.py` | `python/requirements.txt` |
+| AssemblyScript | `assemblyscript/assembly/index.ts` | `assemblyscript/package.json`, `assemblyscript/asconfig.json`, `assemblyscript/tsconfig.json` |
+| Zig | `zig/src/main.zig` | `zig/build.zig`, `zig/build.zig.zon` |
 | C | `c/plugin.c` | `c/Makefile`, `c/extism-pdk.h` |
 
 ## Plugin ABI & `describe()` Specification
@@ -100,7 +100,7 @@ Every plugin must export four functions using the Extism calling convention:
 
 Before publishing, ensure your compiled plugin satisfies these Hub checks:
 
-- **Maximum binary size:** Compiled `.wasm` artefacts must not exceed `1 MB`.
+- **Maximum binary size:** Compiled `.wasm` artefacts must not exceed `1 MB` (`1,048,576` bytes).
 - **Versioning:** `version` must follow strict `MAJOR.MINOR.PATCH` SemVer.
 - **Network allowlist:** `allowed_domains` may contain only public `https` hostnames.
 - **Icon markup:** `icon_svg` must be script-free `<svg viewBox="0 0 24 24">` markup without inline event handlers or external URLs.

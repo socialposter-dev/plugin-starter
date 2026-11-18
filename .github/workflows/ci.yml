@@ -15,19 +15,19 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasip1
+          targets: wasm32-unknown-unknown
 
       - name: Compile Rust plugin
         working-directory: rust
         run: |
-          cargo build --release --target wasm32-wasip1
-          cp target/wasm32-wasip1/release/socialposter_example_plugin.wasm ../output/example-social-rust.wasm
+          cargo build --release --target wasm32-unknown-unknown
+          cp target/wasm32-unknown-unknown/release/socialposter_example_plugin.wasm ../output/example-social-rust.wasm
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Verify WebAssembly ABI exports
+      - name: Verify WebAssembly ABI exports and size limit
         run: node cli/verify-wasm.mjs output/example-social-rust.wasm
 
   build-go:
@@ -49,17 +49,17 @@ jobs:
         working-directory: go
         run: |
           go mod tidy
-          tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared .
+          GOFLAGS="-buildvcs=false" tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared .
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Verify WebAssembly ABI exports
+      - name: Verify WebAssembly ABI exports and size limit
         run: node cli/verify-wasm.mjs output/example-social-go.wasm
 
-  build-typescript:
-    name: Build & Verify (TypeScript)
+  build-assemblyscript:
+    name: Build & Verify (AssemblyScript)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,57 +68,38 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install Binaryen and extism-js
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sudo apt-get update && sudo apt-get install -y binaryen
-          gh release download --repo extism/js-pdk --pattern "extism-js-x86_64-linux-*.gz" --dir /tmp
-          gunzip -f /tmp/extism-js-x86_64-linux-*.gz
-          sudo mv /tmp/extism-js-x86_64-linux-* /usr/local/bin/extism-js
-          sudo chmod +x /usr/local/bin/extism-js
-          extism-js --version || extism-js --help
-
-      - name: Compile TypeScript plugin
-        working-directory: typescript
+      - name: Compile AssemblyScript plugin
+        working-directory: assemblyscript
         run: |
           npm ci
           npm run build
 
-      - name: Verify WebAssembly ABI exports
-        run: node cli/verify-wasm.mjs output/example-social-typescript.wasm
+      - name: Verify WebAssembly ABI exports and size limit
+        run: node cli/verify-wasm.mjs output/example-social-assemblyscript.wasm
 
-  build-python:
-    name: Build & Verify (Python)
+  build-zig:
+    name: Build & Verify (Zig)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install binaryen and extism-py
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq binaryen jq
-          ASSET_URL=$(curl -fsSL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/extism/python-pdk/releases/latest | jq -r '.assets[] | select(.name | test("linux") and test("x86_64|amd64")) | .browser_download_url' | head -n 1)
-          curl -fsSL "$ASSET_URL" -o /tmp/extism-py-asset
-          mkdir -p /tmp/extism-py
-          tar -xzf /tmp/extism-py-asset -C /tmp/extism-py
-          BIN_PATH=$(find /tmp/extism-py -type f -name "extism-py" | head -n 1)
-          sudo install -m 0755 "$BIN_PATH" /usr/local/bin/extism-py
-          USR_DIR=$(find /tmp/extism-py -maxdepth 4 -type d -name "usr" | head -n 1)
-          mkdir -p "${HOME}/.local/share/extism-py"
-          cp -r "$USR_DIR" "${HOME}/.local/share/extism-py/usr"
-          test -d "${HOME}/.local/share/extism-py/usr"
+      - name: Set up Zig 0.13.0
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
 
-      - name: Compile Python plugin
-        working-directory: python
-        run: extism-py plugin.py -o ../output/example-social-python.wasm
+      - name: Compile Zig plugin
+        working-directory: zig
+        run: |
+          zig fetch --save=extism_pdk https://github.com/extism/zig-pdk/archive/refs/tags/v1.2.1.tar.gz
+          zig build -Doptimize=ReleaseSmall
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Verify WebAssembly ABI exports
-        run: node cli/verify-wasm.mjs output/example-social-python.wasm
+      - name: Verify WebAssembly ABI exports and size limit
+        run: node cli/verify-wasm.mjs output/example-social-zig.wasm
 
   build-c:
     name: Build & Verify (C)
@@ -139,5 +120,5 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Verify WebAssembly ABI exports
+      - name: Verify WebAssembly ABI exports and size limit
         run: node cli/verify-wasm.mjs output/example-social-c.wasm

@@ -9,10 +9,9 @@ cli/node_modules/
 
 # Language-specific build caches
 rust/target/
-typescript/node_modules/
-typescript/dist/
-python/__pycache__/
-python/.venv/
+assemblyscript/node_modules/
+zig/.zig-cache/
+zig/zig-out/
 c/*.o
 c/*.wasm
 go/*.wasm
@@ -20,4 +19,3 @@ go/*.wasm
 # OS & editor files
 .DS_Store
 Thumbs.db
-ARCHITECTURE.md

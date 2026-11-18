@@ -1,2 +1,0 @@
-# Extism Python PDK types & compiler (used by extism-py at build time)
-extism-pdk>=0.1.0

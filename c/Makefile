@@ -3,7 +3,8 @@
 
 CC      ?= /opt/wasi-sdk/bin/clang
 OUT     ?= ../output/example-social-c.wasm
-CFLAGS  ?= -O2 -Wall -Wextra -mexec-model=reactor
+CFLAGS  ?= --target=wasm32-wasi -O2 -Wall -Wextra -mexec-model=reactor
+LDFLAGS ?=
 
 .PHONY: all clean
 
@@ -11,7 +12,7 @@ all: $(OUT)
 
 $(OUT): plugin.c extism-pdk.h
 	@mkdir -p $(dir $(OUT))
-	$(CC) $(CFLAGS) -o $(OUT) plugin.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(OUT) plugin.c
 
 clean:
 	rm -f $(OUT)

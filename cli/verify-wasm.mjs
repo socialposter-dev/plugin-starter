@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Verifies that a compiled WebAssembly module exports all four required
- * SocialPoster ABI functions (`describe`, `validate_auth`, `publish`, `delete_post`)
- * and reports its file size and SHA-256 checksum.
+ * SocialPoster ABI functions (`describe`, `validate_auth`, `publish`, `delete_post`),
+ * does not exceed the Hub's 1 MB (1,048,576 bytes) size limit, and reports its
+ * file size and SHA-256 checksum.
  */
 
 import { createHash } from 'node:crypto';
@@ -17,9 +18,11 @@ export const REQUIRED_EXPORTS = [
   'delete_post',
 ];
 
+export const MAX_WASM_BYTES = 1_048_576; // 1 MB (1,024 KB)
+
 /**
  * Inspects a compiled `.wasm` file and returns its size, SHA-256 hash,
- * exported function names, and any missing required ABI exports.
+ * exported function names, size-limit status, and any missing ABI exports.
  */
 export function verifyWasmModule(wasmPath) {
   const absPath = resolve(wasmPath);
@@ -36,14 +39,17 @@ export function verifyWasmModule(wasmPath) {
   const missing = REQUIRED_EXPORTS.filter(
     (name) => !exportedFunctions.includes(name)
   );
+  const withinSizeLimit = size <= MAX_WASM_BYTES;
 
   return {
     path: absPath,
     size,
+    sizeKb: (size / 1024).toFixed(2),
     sha256,
     exportedFunctions,
     missing,
-    ok: missing.length === 0,
+    withinSizeLimit,
+    ok: missing.length === 0 && withinSizeLimit,
   };
 }
 
@@ -58,16 +64,23 @@ if (isMain) {
 
   const result = verifyWasmModule(target);
   console.log(`Artefact : ${result.path}`);
-  console.log(`Size     : ${result.size.toLocaleString('en-GB')} bytes`);
+  console.log(`Size     : ${result.sizeKb} KB (${result.size.toLocaleString('en-GB')} bytes)`);
   console.log(`SHA-256  : ${result.sha256}`);
   console.log(`Exports  : ${result.exportedFunctions.join(', ')}`);
 
-  if (!result.ok) {
+  if (result.missing.length > 0) {
     console.error(
       `Verification failed: missing required ABI export(s): ${result.missing.join(', ')}`
     );
     process.exit(1);
   }
 
-  console.log('Verification passed: all required SocialPoster ABI exports are present.');
+  if (!result.withinSizeLimit) {
+    console.error(
+      `Verification failed: artefact size (${result.size.toLocaleString('en-GB')} bytes) exceeds the 1 MB (${MAX_WASM_BYTES.toLocaleString('en-GB')} bytes) Hub limit.`
+    );
+    process.exit(1);
+  }
+
+  console.log('Verification passed: all required SocialPoster ABI exports are present and size is within 1 MB.');
 }

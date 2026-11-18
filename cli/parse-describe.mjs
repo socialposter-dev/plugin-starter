@@ -1,13 +1,12 @@
 /**
  * Extracts `describe()` metadata from any of the five supported SocialPoster
- * plugin languages (Rust, Go, TypeScript, Python, or C) without needing to
+ * plugin languages (Rust, Go, AssemblyScript, Zig, or C) without needing to
  * compile the plugin first.
  */
 
 import { readFileSync } from 'node:fs';
 
 function matchStringField(block, field) {
-  // Matches `"field": "val"`, `field: "val"`, `Field: "val"`, `\"field\":\"val\"`
   const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pascal = field
     .split('_')
@@ -15,7 +14,7 @@ function matchStringField(block, field) {
     .join('');
 
   const re = new RegExp(
-    `(?:\\\\?"?(?:${escaped}|${pascal})\\\\?"?\\s*:\\s*\\\\?"([^"\\\\]+)\\\\?")`,
+    `(?:\\\\?"?\\.?${escaped}|${pascal})\\\\?"?\\s*(?::|=)\\s*\\\\?"([^"\\\\]+)\\\\?"`,
     'm'
   );
   const m = block.match(re);
@@ -29,7 +28,10 @@ function matchIntField(block, field) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
 
-  const re = new RegExp(`(?:\\\\?"?(?:${escaped}|${pascal})\\\\?"?\\s*:\\s*(\\d+))`, 'm');
+  const re = new RegExp(
+    `(?:\\\\?"?\\.?${escaped}|${pascal})\\\\?"?\\s*(?::|=)\\s*(\\d+)`,
+    'm'
+  );
   const m = block.match(re);
   return m ? Number.parseInt(m[1], 10) : null;
 }
@@ -42,7 +44,7 @@ function matchBoolField(block, field) {
     .join('');
 
   const re = new RegExp(
-    `(?:\\\\?"?(?:${escaped}|${pascal})\\\\?"?\\s*:\\s*(true|false|True|False))`,
+    `(?:\\\\?"?\\.?${escaped}|${pascal})\\\\?"?\\s*(?::|=)\\s*(true|false|True|False)`,
     'm'
   );
   const m = block.match(re);
@@ -56,9 +58,9 @@ function matchStringArray(block, field) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
 
-  // Matches Rust vec![...], Go []string{...}, TS/Python/C [...]
+  // Matches Rust vec![...], Go []string{...}, Zig &.{...}, AS/C [...]
   const re = new RegExp(
-    `(?:\\\\?"?(?:${escaped}|${pascal})\\\\?"?\\s*:\\s*(?:vec!\\[|\\[\\]string\\{|\\[)([\\s\\S]*?)(?:\\]|\\}))`,
+    `(?:\\\\?"?\\.?${escaped}|${pascal})\\\\?"?\\s*(?::|=)\\s*(?:vec!\\[|\\[\\]string\\{|&\\.\\{|\\[)([\\s\\S]*?)(?:\\]|\\})`,
     'm'
   );
   const m = block.match(re);
@@ -78,10 +80,9 @@ function matchCredentialFields(block) {
   if (!startMatch) return [];
 
   const slice = block.slice(startMatch.index);
-  // Extract individual field structs/objects by matching key, label, secret, required
   const fields = [];
   const objRe =
-    /(?:key|Key)\\?"?\s*:\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:label|Label)\\?"?\s*:\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:secret|Secret)\\?"?\s*:\s*(true|false|True|False)[\s\S]*?(?:required|Required)\\?"?\s*:\s*(true|false|True|False)/g;
+    /(?:key|Key)\\?"?\s*(?::|=)\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:label|Label)\\?"?\s*(?::|=)\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:secret|Secret)\\?"?\s*(?::|=)\s*(true|false|True|False)[\s\S]*?(?:required|Required)\\?"?\s*(?::|=)\s*(true|false|True|False)/g;
 
   let m;
   while ((m = objRe.exec(slice)) !== null) {
@@ -101,10 +102,10 @@ function extractDescribeBlock(source, language) {
     startIdx = source.indexOf('pub fn describe');
   } else if (language === 'go') {
     startIdx = source.indexOf('func describe');
-  } else if (language === 'typescript') {
+  } else if (language === 'assemblyscript') {
     startIdx = source.indexOf('export function describe');
-  } else if (language === 'python') {
-    startIdx = source.indexOf('def describe');
+  } else if (language === 'zig') {
+    startIdx = source.indexOf('export fn describe');
   } else if (language === 'c') {
     startIdx = source.indexOf('EXTISM_EXPORTED_FUNCTION(describe)');
   }
@@ -113,7 +114,6 @@ function extractDescribeBlock(source, language) {
     return source;
   }
 
-  // Limit search to the describe() function body (next 4500 chars is ample)
   return source.slice(startIdx, startIdx + 4500);
 }
 

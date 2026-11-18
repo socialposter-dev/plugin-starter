@@ -1,0 +1,15 @@
+{
+  "name": "socialposter-example-assemblyscript",
+  "version": "1.0.0",
+  "description": "Reference SocialPoster WebAssembly plugin written in AssemblyScript using @extism/as-pdk.",
+  "private": true,
+  "scripts": {
+    "build": "asc assembly/index.ts --config asconfig.json --target release --outFile ../output/example-social-assemblyscript.wasm"
+  },
+  "dependencies": {
+    "@extism/as-pdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.31"
+  }
+}

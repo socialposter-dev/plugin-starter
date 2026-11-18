@@ -1,0 +1,16 @@
+.{
+    .name = "socialposter_example_plugin",
+    .version = "1.0.0",
+    .minimum_zig_version = "0.13.0",
+    .dependencies = .{
+        .extism_pdk = .{
+            .url = "https://github.com/extism/zig-pdk/archive/refs/tags/v1.2.1.tar.gz",
+            .hash = "1220d21f918a4e96d7ccea385d7609d97c39430d027997f82121e3fbae273e4d4c06",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
