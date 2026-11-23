@@ -124,7 +124,7 @@ func readCredential(key string) string {
 	}
 	mem := pdk.FindMemory(ptr)
 	defer mem.Free()
-	return mem.ReadString()
+	return string(mem.ReadBytes())
 }
 
 func activeAuthMode() string {
