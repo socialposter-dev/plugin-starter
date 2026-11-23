@@ -49,7 +49,7 @@ jobs:
         working-directory: go
         run: |
           go mod tidy
-          GOFLAGS="-buildvcs=false" tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared .
+          GOFLAGS="-buildvcs=false" tinygo build -o ../output/example-social-go.wasm -target wasip1 -buildmode=c-shared -no-debug .
 
       - uses: actions/setup-node@v4
         with:

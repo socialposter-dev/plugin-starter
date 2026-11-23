@@ -309,23 +309,16 @@ function runDockerAsync(langDirName, image, containerCmdArgs, tracker) {
 }
 
 function formatSummaryBox(meta, langLabel) {
-  const credLines =
-    meta.credential_fields.length > 0
-      ? meta.credential_fields
-          .map(
-            (f) =>
-              `  - ${f.key} ("${f.label}") [${f.required ? 'required' : 'optional'}, ${
-                f.secret ? 'secret' : 'plain text'
-              }]`
-          )
-          .join('\n')
+  const modeLines =
+    meta.auth_modes.length > 0
+      ? meta.auth_modes.map((m) => `  - ${m.id} ("${m.label}")`).join('\n')
       : '  (none)';
 
   return [
     `Language           : ${langLabel}`,
     `Plugin ID          : ${meta.id}`,
     `Display Name       : ${meta.display_name}`,
-    `Version            : ${meta.version}`,
+    `Version            : ${meta.version} (App ${meta.compatible_app_version})`,
     `Brand Colour       : ${meta.brand_colour}`,
     `Max Characters     : ${meta.max_characters ?? 'N/A'}`,
     `Max Attachments    : ${meta.max_attachments ?? 'N/A'}`,
@@ -333,7 +326,7 @@ function formatSummaryBox(meta, langLabel) {
     `Supports Alt-Text  : ${meta.supports_alt_text}`,
     `Supports Delete    : ${meta.supports_delete}`,
     `Allowed Domains    : ${meta.allowed_domains.join(', ') || '(none)'}`,
-    `Credential Fields  :\n${credLines}`,
+    `Auth Modes         :\n${modeLines}`,
   ].join('\n');
 }
 
@@ -396,7 +389,7 @@ async function buildGo(outFile, outName, tracker) {
     // Disable VCS stamping so Git ownership differences never break builds
     await runCommandAsync(
       'tinygo',
-      ['build', '-o', outFile, '-target', 'wasip1', '-buildmode=c-shared', '.'],
+      ['build', '-o', outFile, '-target', 'wasip1', '-buildmode=c-shared', '-no-debug', '.'],
       goDir,
       tracker,
       { GOFLAGS: '-buildvcs=false' }
@@ -414,7 +407,7 @@ async function buildGo(outFile, outName, tracker) {
     [
       'sh',
       '-c',
-      `go mod tidy && GOFLAGS="-buildvcs=false" tinygo build -o /work/output/${outName} -target wasip1 -buildmode=c-shared .`,
+      `go mod tidy && GOFLAGS="-buildvcs=false" tinygo build -o /work/output/${outName} -target wasip1 -buildmode=c-shared -no-debug .`,
     ],
     tracker
   );

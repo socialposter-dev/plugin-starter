@@ -1,8 +1,8 @@
 /**
- * Reference SocialPoster WebAssembly plugin in C (clang + vendored extism-pdk.h).
+ * Reference SocialPoster 1.0.0 WebAssembly plugin in C (clang + vendored extism-pdk.h).
  *
  * Compile with WASI SDK:
- *   /opt/wasi-sdk/bin/clang -O2 -mexec-model=reactor -o ../output/example-social-c.wasm plugin.c
+ *   /opt/wasi-sdk/bin/clang -Os --target=wasm32-wasi -mexec-model=reactor -Wl,--strip-all -o ../output/example-social-c.wasm plugin.c
  */
 
 #define EXTISM_USE_LIBC
@@ -15,13 +15,22 @@
 #include <string.h>
 
 /* ------------------------------------------------------------------------- */
-/* Minimal JSON Helpers (zero external dependencies)                         */
+/* SocialPoster 1.0.0 Host Functions (extism:host/user)                      */
 /* ------------------------------------------------------------------------- */
 
-/**
- * Extracts a string value for `"key": "value"` from a JSON buffer.
- * Writes up to `out_cap - 1` characters into `out` and returns true if found.
- */
+EXTISM_IMPORT_USER("sp_credential")
+extern ExtismHandle sp_credential(const ExtismHandle);
+
+EXTISM_IMPORT_USER("sp_media_chunk")
+extern ExtismHandle sp_media_chunk(const ExtismHandle);
+
+EXTISM_IMPORT_USER("sp_http")
+extern ExtismHandle sp_http(const ExtismHandle);
+
+/* ------------------------------------------------------------------------- */
+/* Minimal JSON & Host Function Helpers (zero external dependencies)         */
+/* ------------------------------------------------------------------------- */
+
 static bool json_get_string(const char *json, const char *key, char *out,
                             size_t out_cap) {
   if (!json || !key || !out || out_cap == 0) {
@@ -63,32 +72,131 @@ static bool json_get_string(const char *json, const char *key, char *out,
   return true;
 }
 
-static void resolve_base_url(const char *input, char *out, size_t out_cap) {
-  if (json_get_string(input, "instance_url", out, out_cap) && out[0] != '\0') {
-    size_t len = strlen(out);
-    while (len > 0 && out[len - 1] == '/') {
-      out[--len] = '\0';
+static int json_get_int(const char *json, const char *key) {
+  if (!json || !key) {
+    return 0;
+  }
+  char pattern[128];
+  snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+
+  const char *pos = strstr(json, pattern);
+  if (!pos) {
+    return 0;
+  }
+  pos += strlen(pattern);
+  while (*pos == ' ' || *pos == '\t' || *pos == ':' || *pos == '\n') {
+    pos++;
+  }
+  return atoi(pos);
+}
+
+static void read_credential(const char *key, char *out, size_t out_cap) {
+  out[0] = '\0';
+  ExtismHandle key_h = extism_alloc_buf_from_sz(key);
+  ExtismHandle res_h = sp_credential(key_h);
+  extism_free(key_h);
+  if (!res_h) {
+    return;
+  }
+  char *str = extism_load_sz_dup(res_h, NULL);
+  extism_free(res_h);
+  if (str) {
+    snprintf(out, out_cap, "%s", str);
+    free(str);
+  }
+}
+
+static void active_auth_mode(char *out, size_t out_cap) {
+  read_credential("__auth_mode", out, out_cap);
+  if (out[0] == '\0') {
+    snprintf(out, out_cap, "api_key");
+  }
+}
+
+static const char *mode_token_key(const char *mode) {
+  return strcmp(mode, "webhook_app") == 0 ? "app_token" : "api_token";
+}
+
+static void resolve_base_url(char *out, size_t out_cap) {
+  read_credential("instance_url", out, out_cap);
+  size_t len = strlen(out);
+  while (len > 0 && out[len - 1] == '/') {
+    out[--len] = '\0';
+  }
+  if (len == 0) {
+    snprintf(out, out_cap, "https://api.example.com");
+  }
+}
+
+static int32_t call_sp_http(const char *req_json, char *body_out,
+                            size_t body_cap) {
+  if (body_out && body_cap > 0) {
+    body_out[0] = '\0';
+  }
+  ExtismHandle req_h = extism_alloc_buf_from_sz(req_json);
+  ExtismHandle res_h = sp_http(req_h);
+  extism_free(req_h);
+  if (!res_h) {
+    return 0;
+  }
+  char *res_str = extism_load_sz_dup(res_h, NULL);
+  extism_free(res_h);
+  if (!res_str) {
+    return 0;
+  }
+  int32_t status = json_get_int(res_str, "status");
+  if (body_out && body_cap > 0) {
+    json_get_string(res_str, "body", body_out, body_cap);
+  }
+  free(res_str);
+  return status;
+}
+
+static size_t stream_attachment_bytes(const char *attachment_id) {
+  const size_t chunk_size = 65536;
+  size_t total = 0;
+  size_t offset = 0;
+
+  while (true) {
+    char req_json[512];
+    snprintf(req_json, sizeof(req_json),
+             "{\"attachment_id\":\"%s\",\"offset\":%zu,\"length\":%zu}",
+             attachment_id, offset, chunk_size);
+    ExtismHandle req_h = extism_alloc_buf_from_sz(req_json);
+    ExtismHandle chunk_h = sp_media_chunk(req_h);
+    extism_free(req_h);
+    if (!chunk_h) {
+      break;
     }
-    if (len > 0) {
-      return;
+    uint64_t chunk_len = extism_length(chunk_h);
+    extism_free(chunk_h);
+    if (chunk_len == 0) {
+      break;
+    }
+    total += (size_t)chunk_len;
+    offset += (size_t)chunk_len;
+    if (chunk_len < chunk_size) {
+      break;
     }
   }
-  snprintf(out, out_cap, "https://api.example.com");
+  return total;
 }
 
 /* ------------------------------------------------------------------------- */
-/* Required SocialPoster ABI Exports                                         */
+/* Required SocialPoster 1.0.0 ABI Exports                                   */
 /* ------------------------------------------------------------------------- */
 
 /**
- * Returns plugin metadata, capabilities, and credential field definitions.
+ * Returns plugin metadata, capabilities, and `auth_modes` definitions.
  */
 int32_t EXTISM_EXPORTED_FUNCTION(describe) {
   static const char *METADATA_JSON =
       "{"
       "\"id\":\"example-social\","
       "\"version\":\"1.0.0\","
+      "\"compatible_app_version\":\"^1.0.0\","
       "\"display_name\":\"Example Social\","
+      "\"authors\":[{\"name\":\"Your Name\",\"links\":[{\"label\":\"Website\",\"url\":\"https://example.com\"}]}],"
       "\"brand_colour\":\"#5B4BFF\","
       "\"icon_svg\":\"<svg viewBox=\\\"0 0 24 24\\\" fill=\\\"none\\\"><circle cx=\\\"12\\\" cy=\\\"12\\\" r=\\\"10\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"2\\\"/><path d=\\\"M8 12l3 3 5-6\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"2\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"/></svg>\","
       "\"max_characters\":500,"
@@ -98,11 +206,28 @@ int32_t EXTISM_EXPORTED_FUNCTION(describe) {
       "\"supports_threads\":true,"
       "\"supports_delete\":true,"
       "\"allowed_domains\":[\"api.example.com\",\"upload.example.com\"],"
-      "\"credential_fields\":["
+      "\"auth_modes\":["
+      "{"
+      "\"id\":\"api_key\","
+      "\"label\":\"API Key\","
+      "\"description\":\"Authenticate using a personal API token and account handle.\","
+      "\"setup_instructions\":\"1. Open **Settings -> Developer** on Example Social.\\n2. Create a new **API Token** with publish and delete permissions.\\n3. Paste your token and account handle below.\","
+      "\"fields\":["
       "{\"key\":\"api_token\",\"label\":\"API Token\",\"secret\":true,\"required\":true},"
       "{\"key\":\"handle\",\"label\":\"Account Handle\",\"secret\":false,\"required\":true},"
-      "{\"key\":\"instance_url\",\"label\":\"Instance URL\",\"secret\":false,\"required\":false},"
+      "{\"key\":\"instance_url\",\"label\":\"Instance URL\",\"secret\":false,\"required\":false}"
+      "]"
+      "},"
+      "{"
+      "\"id\":\"webhook_app\","
+      "\"label\":\"App Credentials\","
+      "\"description\":\"Authenticate using an application token and optional webhook signing secret.\","
+      "\"setup_instructions\":\"1. Register an application in the **Example Social App Portal**.\\n2. Copy the **App Token** and optional **Webhook Signing Secret**.\","
+      "\"fields\":["
+      "{\"key\":\"app_token\",\"label\":\"App Token\",\"secret\":true,\"required\":true},"
       "{\"key\":\"webhook_secret\",\"label\":\"Webhook Signing Secret\",\"secret\":true,\"required\":false}"
+      "]"
+      "}"
       "]"
       "}";
 
@@ -111,47 +236,43 @@ int32_t EXTISM_EXPORTED_FUNCTION(describe) {
 }
 
 /**
- * Verifies user credentials against the target platform's authentication endpoint.
+ * Verifies credentials for the active `__auth_mode` via `sp_credential` and `sp_http`.
  */
 int32_t EXTISM_EXPORTED_FUNCTION(validate_auth) {
-  char *input = extism_load_input_sz_dup(NULL);
-  if (!input) {
-    extism_error_set_buf_from_sz("Failed to read input payload.");
-    return 1;
-  }
-
+  char mode[64];
   char token[512];
-  char handle[256];
-  json_get_string(input, "api_token", token, sizeof(token));
-  json_get_string(input, "handle", handle, sizeof(handle));
+  active_auth_mode(mode, sizeof(mode));
+  read_credential(mode_token_key(mode), token, sizeof(token));
 
-  if (token[0] == '\0' || handle[0] == '\0') {
-    free(input);
-    extism_output_buf_from_sz(
-        "{\"valid\":false,\"error\":\"Both api_token and handle are required.\"}");
+  if (token[0] == '\0') {
+    char err_json[256];
+    snprintf(err_json, sizeof(err_json),
+             "{\"valid\":false,\"error\":\"Missing required token for authentication mode '%s'.\"}",
+             mode);
+    extism_output_buf_from_sz(err_json);
     return 0;
   }
 
+  if (strcmp(mode, "api_key") == 0) {
+    char handle[256];
+    read_credential("handle", handle, sizeof(handle));
+    if (handle[0] == '\0') {
+      extism_output_buf_from_sz(
+          "{\"valid\":false,\"error\":\"Account Handle is required for API Key mode.\"}");
+      return 0;
+    }
+  }
+
   char base_url[512];
-  resolve_base_url(input, base_url, sizeof(base_url));
-  free(input);
+  resolve_base_url(base_url, sizeof(base_url));
 
   char req_json[1536];
   snprintf(req_json, sizeof(req_json),
-           "{\"url\":\"%s/v1/accounts/verify_credentials\","
-           "\"method\":\"GET\","
+           "{\"method\":\"GET\",\"url\":\"%s/v1/accounts/verify_credentials\","
            "\"headers\":{\"Authorization\":\"Bearer %s\",\"Accept\":\"application/json\"}}",
            base_url, token);
 
-  ExtismHandle req_h = extism_alloc_buf_from_sz(req_json);
-  ExtismHandle res_h = extism_http_request(req_h, 0);
-  int32_t status = extism_http_status_code();
-
-  extism_free(req_h);
-  if (res_h) {
-    extism_free(res_h);
-  }
-
+  int32_t status = call_sp_http(req_json, NULL, 0);
   if (status >= 200 && status < 300) {
     extism_output_buf_from_sz("{\"valid\":true}");
   } else {
@@ -165,7 +286,7 @@ int32_t EXTISM_EXPORTED_FUNCTION(validate_auth) {
 }
 
 /**
- * Publishes a post (reading text, attachments with alt_text, and optional reply_to_id).
+ * Publishes a post, streaming attachments via `sp_media_chunk` and prefixing `post_id` with `<mode>:`.
  */
 int32_t EXTISM_EXPORTED_FUNCTION(publish) {
   char *input = extism_load_input_sz_dup(NULL);
@@ -174,11 +295,13 @@ int32_t EXTISM_EXPORTED_FUNCTION(publish) {
     return 1;
   }
 
+  char mode[64];
   char token[512];
-  if (!json_get_string(input, "api_token", token, sizeof(token)) ||
-      token[0] == '\0') {
+  active_auth_mode(mode, sizeof(mode));
+  read_credential(mode_token_key(mode), token, sizeof(token));
+  if (token[0] == '\0') {
     free(input);
-    extism_error_set_buf_from_sz("Missing required credential: api_token");
+    extism_error_set_buf_from_sz("Missing required credential for active mode.");
     return 1;
   }
 
@@ -186,106 +309,67 @@ int32_t EXTISM_EXPORTED_FUNCTION(publish) {
   char text[1024];
   char reply_to_id[256];
   char alt_text[512];
-  resolve_base_url(input, base_url, sizeof(base_url));
+  char attachment_id[256];
+  resolve_base_url(base_url, sizeof(base_url));
   json_get_string(input, "text", text, sizeof(text));
   json_get_string(input, "reply_to_id", reply_to_id, sizeof(reply_to_id));
   json_get_string(input, "alt_text", alt_text, sizeof(alt_text));
+  json_get_string(input, "attachment_id", attachment_id, sizeof(attachment_id));
+  free(input);
 
-  /* 1. If attachments are present, upload to upload.example.com preserving alt_text. */
+  /* 1. Stream media attachment via `sp_media_chunk` and upload via `sp_http`. */
   char media_id[128] = "";
-  if (strstr(input, "\"attachments\"") != NULL &&
-      strstr(input, "\"mime_type\"") != NULL) {
-    char upload_req_json[1024];
+  if (attachment_id[0] != '\0') {
+    size_t byte_len = stream_attachment_bytes(attachment_id);
+    char upload_req_json[2048];
     snprintf(upload_req_json, sizeof(upload_req_json),
-             "{\"url\":\"https://upload.example.com/v1/media\","
-             "\"method\":\"POST\","
-             "\"headers\":{\"Authorization\":\"Bearer %s\",\"Content-Type\":\"application/json\"}}",
-             token);
+             "{\"method\":\"POST\",\"url\":\"https://upload.example.com/v1/media\","
+             "\"headers\":{\"Authorization\":\"Bearer %s\",\"Content-Type\":\"application/json\"},"
+             "\"body\":\"{\\\"byte_length\\\":%zu,\\\"alt_text\\\":\\\"%s\\\"}\"}",
+             token, byte_len, alt_text);
 
-    char upload_body[1024];
-    snprintf(upload_body, sizeof(upload_body), "{\"alt_text\":\"%s\"}", alt_text);
-
-    ExtismHandle up_req_h = extism_alloc_buf_from_sz(upload_req_json);
-    ExtismHandle up_body_h = extism_alloc_buf_from_sz(upload_body);
-    ExtismHandle up_res_h = extism_http_request(up_req_h, up_body_h);
-    int32_t up_status = extism_http_status_code();
-
-    extism_free(up_req_h);
-    extism_free(up_body_h);
-
+    char upload_body[512];
+    int32_t up_status = call_sp_http(upload_req_json, upload_body, sizeof(upload_body));
     if (up_status < 200 || up_status >= 300) {
-      if (up_res_h) {
-        extism_free(up_res_h);
-      }
-      free(input);
       extism_error_set_buf_from_sz("Media upload failed.");
       return 1;
     }
-
-    if (up_res_h) {
-      char *up_res_str = extism_load_sz_dup(up_res_h, NULL);
-      if (up_res_str) {
-        json_get_string(up_res_str, "media_id", media_id, sizeof(media_id));
-        free(up_res_str);
-      }
-      extism_free(up_res_h);
-    }
+    json_get_string(upload_body, "media_id", media_id, sizeof(media_id));
   }
-  free(input);
 
-  /* 2. Create the post (including reply_to_id for threads when provided). */
-  char post_req_json[1536];
+  /* 2. Create the post via `sp_http` (including optional `reply_to_id`). */
+  char post_req_json[3072];
   snprintf(post_req_json, sizeof(post_req_json),
-           "{\"url\":\"%s/v1/posts\","
-           "\"method\":\"POST\","
-           "\"headers\":{\"Authorization\":\"Bearer %s\",\"Content-Type\":\"application/json\"}}",
-           base_url, token);
+           "{\"method\":\"POST\",\"url\":\"%s/v1/posts\","
+           "\"headers\":{\"Authorization\":\"Bearer %s\",\"Content-Type\":\"application/json\"},"
+           "\"body\":\"{\\\"text\\\":\\\"%s\\\",\\\"media_id\\\":\\\"%s\\\",\\\"reply_to_id\\\":\\\"%s\\\"}\"}",
+           base_url, token, text, media_id, reply_to_id);
 
-  char post_body[2048];
-  snprintf(post_body, sizeof(post_body),
-           "{\"text\":\"%s\",\"media_id\":\"%s\",\"reply_to_id\":\"%s\"}",
-           text, media_id, reply_to_id);
-
-  ExtismHandle req_h = extism_alloc_buf_from_sz(post_req_json);
-  ExtismHandle body_h = extism_alloc_buf_from_sz(post_body);
-  ExtismHandle res_h = extism_http_request(req_h, body_h);
-  int32_t status = extism_http_status_code();
-
-  extism_free(req_h);
-  extism_free(body_h);
-
+  char res_body[1024];
+  int32_t status = call_sp_http(post_req_json, res_body, sizeof(res_body));
   if (status < 200 || status >= 300) {
-    if (res_h) {
-      extism_free(res_h);
-    }
     extism_error_set_buf_from_sz("Publish request failed.");
     return 1;
   }
 
-  char post_id[128] = "post_unknown";
+  char raw_id[128] = "post_unknown";
   char post_url[512] = "";
-  if (res_h) {
-    char *res_str = extism_load_sz_dup(res_h, NULL);
-    if (res_str) {
-      json_get_string(res_str, "id", post_id, sizeof(post_id));
-      json_get_string(res_str, "url", post_url, sizeof(post_url));
-      free(res_str);
-    }
-    extism_free(res_h);
-  }
+  json_get_string(res_body, "id", raw_id, sizeof(raw_id));
+  json_get_string(res_body, "url", post_url, sizeof(post_url));
   if (post_url[0] == '\0') {
-    snprintf(post_url, sizeof(post_url), "%s/posts/%s", base_url, post_id);
+    snprintf(post_url, sizeof(post_url), "%s/posts/%s", base_url, raw_id);
   }
 
-  char out_json[768];
+  /* Prefix `post_id` with `<mode>:` so `delete_post` routes correctly across mode switches. */
+  char out_json[896];
   snprintf(out_json, sizeof(out_json),
-           "{\"post_id\":\"%s\",\"url\":\"%s\"}", post_id, post_url);
+           "{\"post_id\":\"%s:%s\",\"url\":\"%s\"}", mode, raw_id, post_url);
   extism_output_buf_from_sz(out_json);
   return 0;
 }
 
 /**
- * Deletes a previously published post by its `post_id`.
+ * Deletes a previously published post, routing via the `<mode>:` prefix on `post_id`.
  */
 int32_t EXTISM_EXPORTED_FUNCTION(delete_post) {
   char *input = extism_load_input_sz_dup(NULL);
@@ -294,41 +378,45 @@ int32_t EXTISM_EXPORTED_FUNCTION(delete_post) {
     return 1;
   }
 
-  char token[512];
   char post_id[256];
-  if (!json_get_string(input, "api_token", token, sizeof(token)) ||
-      token[0] == '\0') {
-    free(input);
-    extism_error_set_buf_from_sz("Missing required credential: api_token");
-    return 1;
-  }
   if (!json_get_string(input, "post_id", post_id, sizeof(post_id)) ||
       post_id[0] == '\0') {
     free(input);
     extism_error_set_buf_from_sz("post_id must not be empty.");
     return 1;
   }
+  free(input);
+
+  char mode[64];
+  active_auth_mode(mode, sizeof(mode));
+  const char *raw_id = post_id;
+  char *colon = strchr(post_id, ':');
+  if (colon && colon != post_id && *(colon + 1) != '\0') {
+    size_t mode_len = (size_t)(colon - post_id);
+    if (mode_len < sizeof(mode)) {
+      memcpy(mode, post_id, mode_len);
+      mode[mode_len] = '\0';
+    }
+    raw_id = colon + 1;
+  }
+
+  char token[512];
+  read_credential(mode_token_key(mode), token, sizeof(token));
+  if (token[0] == '\0') {
+    extism_error_set_buf_from_sz("Missing required credential for mode.");
+    return 1;
+  }
 
   char base_url[512];
-  resolve_base_url(input, base_url, sizeof(base_url));
-  free(input);
+  resolve_base_url(base_url, sizeof(base_url));
 
   char req_json[1536];
   snprintf(req_json, sizeof(req_json),
-           "{\"url\":\"%s/v1/posts/%s\","
-           "\"method\":\"DELETE\","
+           "{\"method\":\"DELETE\",\"url\":\"%s/v1/posts/%s\","
            "\"headers\":{\"Authorization\":\"Bearer %s\"}}",
-           base_url, post_id, token);
+           base_url, raw_id, token);
 
-  ExtismHandle req_h = extism_alloc_buf_from_sz(req_json);
-  ExtismHandle res_h = extism_http_request(req_h, 0);
-  int32_t status = extism_http_status_code();
-
-  extism_free(req_h);
-  if (res_h) {
-    extism_free(res_h);
-  }
-
+  int32_t status = call_sp_http(req_json, NULL, 0);
   if (status < 200 || status >= 300) {
     extism_error_set_buf_from_sz("Delete request failed.");
     return 1;

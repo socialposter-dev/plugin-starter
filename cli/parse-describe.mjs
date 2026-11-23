@@ -75,25 +75,20 @@ function matchStringArray(block, field) {
   return items;
 }
 
-function matchCredentialFields(block) {
-  const startMatch = block.match(/(?:credential_fields|CredentialFields)/);
+function matchAuthModes(block) {
+  const startMatch = block.match(/(?:auth_modes|AuthModes)/);
   if (!startMatch) return [];
 
   const slice = block.slice(startMatch.index);
-  const fields = [];
-  const objRe =
-    /(?:key|Key)\\?"?\s*(?::|=)\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:label|Label)\\?"?\s*(?::|=)\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:secret|Secret)\\?"?\s*(?::|=)\s*(true|false|True|False)[\s\S]*?(?:required|Required)\\?"?\s*(?::|=)\s*(true|false|True|False)/g;
+  const modes = [];
+  const modeRe =
+    /(?:id|ID|\.?id)\\?"?\s*(?::|=)\s*\\?"([^"\\]+)\\?"[\s\S]*?(?:label|Label|\.?label)\\?"?\s*(?::|=)\s*\\?"([^"\\]+)\\?"/g;
 
   let m;
-  while ((m = objRe.exec(slice)) !== null) {
-    fields.push({
-      key: m[1],
-      label: m[2],
-      secret: m[3].toLowerCase() === 'true',
-      required: m[4].toLowerCase() === 'true',
-    });
+  while ((m = modeRe.exec(slice)) !== null) {
+    modes.push({ id: m[1], label: m[2] });
   }
-  return fields;
+  return modes;
 }
 
 function extractDescribeBlock(source, language) {
@@ -114,7 +109,7 @@ function extractDescribeBlock(source, language) {
     return source;
   }
 
-  return source.slice(startIdx, startIdx + 4500);
+  return source.slice(startIdx, startIdx + 6500);
 }
 
 /**
@@ -128,6 +123,7 @@ export function parseDescribeMetadata(filePath, language) {
     id: matchStringField(block, 'id') ?? 'unknown-plugin',
     display_name: matchStringField(block, 'display_name') ?? 'Unknown Plugin',
     version: matchStringField(block, 'version') ?? '0.0.0',
+    compatible_app_version: matchStringField(block, 'compatible_app_version') ?? '^1.0.0',
     brand_colour: matchStringField(block, 'brand_colour') ?? '#000000',
     max_characters: matchIntField(block, 'max_characters'),
     max_attachments: matchIntField(block, 'max_attachments'),
@@ -135,6 +131,6 @@ export function parseDescribeMetadata(filePath, language) {
     supports_alt_text: matchBoolField(block, 'supports_alt_text'),
     supports_delete: matchBoolField(block, 'supports_delete'),
     allowed_domains: matchStringArray(block, 'allowed_domains'),
-    credential_fields: matchCredentialFields(block),
+    auth_modes: matchAuthModes(block),
   };
 }

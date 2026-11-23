@@ -2,6 +2,7 @@
 ARCHITECTURE.md
 
 # Compiled WebAssembly artefacts
+dist/
 output/*.wasm
 
 # CLI dependencies

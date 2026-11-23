@@ -3,8 +3,8 @@
 
 CC      ?= /opt/wasi-sdk/bin/clang
 OUT     ?= ../output/example-social-c.wasm
-CFLAGS  ?= --target=wasm32-wasi -O2 -Wall -Wextra -mexec-model=reactor
-LDFLAGS ?=
+CFLAGS  ?= --target=wasm32-wasi -Os -Wall -Wextra -mexec-model=reactor
+LDFLAGS ?= -Wl,--strip-all
 
 .PHONY: all clean
 

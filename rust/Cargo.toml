@@ -2,7 +2,8 @@
 name = "socialposter-example-plugin"
 version = "1.0.0"
 edition = "2021"
-description = "Reference SocialPoster WebAssembly plugin written in Rust using extism-pdk."
+license = "MIT"
+description = "Reference SocialPoster 1.0.0 WebAssembly plugin written in Rust using extism-pdk."
 
 [lib]
 # Compile as a C-compatible dynamic library so Cargo produces a standalone .wasm module.
@@ -12,3 +13,11 @@ crate-type = ["cdylib"]
 extism-pdk = "1.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[profile.release]
+# Optimise aggressively for binary size to stay well below the 1 MB Hub limit.
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
